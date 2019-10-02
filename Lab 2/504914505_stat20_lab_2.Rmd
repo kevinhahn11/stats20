@@ -1,0 +1,106 @@
+---
+title: "Lab 2"
+author: 
+  - "Kevin Hahn"
+  - "Collaborated with Whitney Wood & Ayesha Kumbhare"
+date: "7/22/2019"
+output: 
+  prettydoc::html_pretty:
+    theme: architect
+---
+
+```{r setup, echo = TRUE, include = TRUE, results = 'hide', message = FALSE, warning = FALSE}
+# Setup of the Data Extraction and Wrangling Process
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(extrafont)
+library(tidyverse)
+
+# PERM <- read_csv("PERM2018.csv")
+
+# mydata <- PERM %>% select(c(CASE_STATUS, COUNTRY_OF_CITIZENSHIP, PW_AMOUNT_9089, FOREIGN_WORKER_INFO_EDUCATION)) %>% filter(CASE_STATUS == "Certified")
+
+# save(mydata, file = "Lab2.RData")
+load("Lab2.RData")
+nations <- mydata[[2]] # all nations listed in the doc, there will be some duplicates
+
+# Find the top 5 nations with the most certified applicants:
+sort(table(as.character(nations)), decreasing = TRUE)[1:5]
+# Output: India, China, South Korea, Canada, Mexico
+
+TOP5 <- mydata %>% filter(COUNTRY_OF_CITIZENSHIP == "INDIA" |
+                          COUNTRY_OF_CITIZENSHIP == "CHINA" |
+                          COUNTRY_OF_CITIZENSHIP == "SOUTH KOREA" |
+                          COUNTRY_OF_CITIZENSHIP == "CANADA" |
+                          COUNTRY_OF_CITIZENSHIP == "MEXICO") %>% 
+  filter(FOREIGN_WORKER_INFO_EDUCATION != "Other" &
+         FOREIGN_WORKER_INFO_EDUCATION != "NA")
+
+```
+# The Visualization
+```{r, warning=FALSE, fig.width=12, fig.height=7, dpi=300}
+# Generating the Graphic
+options(scipen = 100000)
+
+# Ordering the graph's legend and x-axis
+edu_levels <- c("None", "High School", "Associate's", "Bachelor's", "Master's", "Doctorate")
+nation_levels <- c("INDIA", "CHINA", "SOUTH KOREA", "CANADA", "MEXICO")
+
+order_nations <- factor(TOP5[[2]], levels = nation_levels)
+order_edu <- factor(TOP5[[4]], levels = edu_levels)
+
+options(scipen = 100000)
+theme_set(theme_minimal(base_family = "Myanmar Text"))
+my_graph <- ggplot(data = TOP5, aes(x = order_nations, y = PW_AMOUNT_9089, fill=order_edu)) + 
+  ylim(c(0, 200000)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_brewer(palette="Set3") + 
+  labs(title = "Wages of Certified Immigrants in the U.S.", 
+       x = "Country of Citizenship\nTop 5 Most Certified in Descending Order", y = "Prevailing Wage", 
+       fill = "Highest Education Level Completed") +
+  theme(plot.background=element_rect(fill = "lightgray"),
+        plot.title=element_text(size=20,
+                                face="bold",
+                                hjust=0.5,
+                                lineheight=1.2),
+        axis.title.x=element_text(size=19, face="bold"),
+        axis.title.y=element_text(size=19, face="bold"),
+        axis.text.x=element_text(size=12, color="black", face="bold"),
+        axis.text.y=element_text(size=12, color="black", face="bold"),
+        legend.title=element_text(size=15, face="bold"), 
+        legend.text=element_text(size=14, face="bold"))
+plot(my_graph)
+```
+
+# Write-Up
+
+## A. Because different graphics can highlight different aspects of a data set, your brief write-up should clearly state what part of the data you are attempting to most effectively communicate. In other words, which story in the data are you trying to tell us (i.e., there are many stories in any data set, this part is a description of your visualization)?
+## B. Which part of the data did it involve? To keep this lab from becoming overwhelming, it is also important to have an awareness of which aspects of the data are not being addressed due to your choices. For example, your data may have a natural grouping that you chose to ignore because it was not interesting. Do not try to visualize every dimension of the data, just be brave and keep it simple (but do try to make it interesting).  
+## C. Somewhere in your brief write-up document your (or your group’s) choices and tell us why these choices were appropriate for the data.  
+The write-up below loosely follows the order of the questions asked in (A), (B), (C):
+
+We decided to examine the data of only immigrants whose case status was certified, i.e. those who were certified to work in the U.S. Within this subsetted data, we honed in on the top 5 countries of citizenship that had the most certified workers, which were India, China, South Korea, Canada, and Mexico (1-5 in this order). The immigrant applicants are not equally spread out across every country in the data set, so it was best to choose only the top 5, all of which were major countries with sufficiently large sample sizes. For each country of citizenship, we wanted to analyze how wages varied based on education level, so we displayed boxplots of the prevailing wage for each education level to convey as much information as possible. That way, we can see the median, min, max, and the 25th and 75th percentiles of the wages. Scatterplots or histograms weren't enough to convey all this informaton in one nice graph. We hypothesized that regardless of one's country of citizenship, wages would generally increase as education level increases (because that's what most people would normally expect). In the end, there was contrary evidence. For all five countries, immigrants with doctorate degrees had lower prevailing wages than those who only have master degrees. In the graph, this is indicated by a country's doctorate boxplots being slightly lower than its masters boxplots (i.e. a country's 25th, median (50th), and 75th percentiles for doctorates were all lower than its 25th, 50th, and 75th percentiles of master's boxplots, respectively).
+
+Methodologically, this analysis was primarily concerned with 4 variables: country of citizenship, education level, case status, and prevailing wage. Prevailing wage was the most logical option for us because We didn't use the Country of Birth variable because not all nations have birthright citizenship like the U.S. does. Moreover, it's not uncommon for someone to have been born in one country and brought up as a citizen in another country where they have spent a much longer time living in. We also filtered out all other case statuses that weren't "Certified" because they just weren't relevant to what we wanted to show about foreign workers in America. For instance, observations with a "Denied" case status aren't very useful here since these immigrants can't even work in America. Another aspect we left unaddressed was industry and major. Although these two variables do play a factor in determinating wages, we wanted to analyze the wages of the workers certified to work in the U.S. holistically.
+
+There were decisions that definitely required some thought. Narrowing down the observations to only those from the top 5 countries with the most certified case statuses was crucial because the data set was still substantially large and fitting 150+ nations on our x-axis was unrealistic. Among the top 5 nations, we filtered out observations where the education level was "Other" or "NA" because they were somewhat vague. By restricting education levels to None, H.S., Associate's, Bachelor's, Master's, and Doctorate, we kept things tangible. In our reduced dataset, we had to create 2 new columns, order_nations and order_edu, to order the x-axis variables and education level on the graph accordingly. To improve readability, we removed the outliers from the boxplots, boldened the labels, and chose a nice color palette based on education level.
+
+# Open-Ended Question (one paragraph per please, individual only)
+These are “thought” questions and should be yours alone, not a group decision. While you might discuss this within the context of a group, our hope is that you are the owner/creator of the answers.
+
+## A. If you could add any additional information you wanted just by snapping your fingers, what two columns would you add? Give us a column name, what kind of data would we find in this column, and what would some of its values (e.g., a range of values, a set of labels) be? Please also indicate where do you think we might find this data?
+The first new column I would add is MEDIAN_JOB_TENURE - median job tenure of the desired job. The unit of this variable would be in years, and the values would be nonnegative numbers rounded to 2 decimal places. Any nonnegative real numer is possible, but realistically speaking, most median job tenures would typically fall between 0 and 10 years. The second new column I would add is LIVING_WAGE - Living wage in the city where the desired job is based. Living wage is the lowest wage at which subsistence needs can be met by an employee. The values in this column would just be any nonnegative dollar amount. Both of these data could be found on government data such as the Bureau of Labor Statistics. For living wage, one could also obtain these numbers from [MIT's Living Wage calculator website](http://livingwage.mit.edu/). 
+
+## B. SUPPOSE you really HAD these two additional columns of data, what questions would you be able to answer with this new data which you could not answer with the original data? For full credit, please give us two additional questions.
+Since we already know the state where the job is based and that it would be easy to compare states by grouping the cities into their respective states via filtering, then data of city-specific living wages would add a whole another layer of fascinating insight. As a result, we could then analyze which locations immigrants tend to target (e.g. Hawaii being a popular hotspot for Japanese immigrants), or discover other locations (besides major cities like LA, SF, NYC, Seattle) that would be favorable for immigrants to work in. Median job tenure could help us separate fickle industries from stable industries, or even determine if immigrants from certain countries target long-term jobs in the U.s.
+
+1. Which locations should an immigrant consider working in if they want an adequate standard of living?
+
+2. Which industries offer the most job stability for immigrants?
+
+## C. (LAST ONE) Imagine you have all the additional data you want, on a clean sheet of paper (if you need one, stop by my office and I’ll give you some) please sketch what visualization you believe you would be able to create with your new data. 
+Your sketch doesn’t need to be colored, nor does it need to be accurate, nor does it need to be good, it is simply a mental exercise to generate what you would visualize using software if you knew how to do it.This does not need to be a standard, textbook visualization, you are free to use your imagination (think - Da Vinci, Van Gogh, Picasso…). And please upload either a photograph or scan of your sketch.
+
+By knowing the living wages in various cities, we could produce a heat map of the outlined shape of the United States. The legend is an increasing bar from red to green. The greener it is in a certain region, the higher the standard of living is in that region. Conversely, the redder it is, the lower the standard of living. Provided that we have all the data we want, the heat map could be so precise to the point where you can zoom in on a city and examine the differing qualities of living within that city. What inspired this type of drawing were the heat maps of companies' stock prices (over one year) that the instructor displayed during lecture.
+![Sketch](sketch.jpg)
