@@ -1,0 +1,102 @@
+---
+title: "Lab 3"
+author: "Kevin Hahn"
+date: "8/2/2019"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(dplyr)
+library(kableExtra)
+```
+# 1. More Readable Version of the SD function
+```{r}
+mysd1 <- function(x, na.rm = FALSE) {
+  if (is.vector(x) || is.factor(x))
+    x <- x
+  else
+    x <- as.double(x)
+  n <- length(x)
+  standard_deviation <- sqrt(sum((x - mean(x)) ^ 2) / (n - 1))
+  standard_deviation
+}
+
+mysd1(rivers)
+```
+# 2. Modify an R function to accommodate something different
+```{r}
+mysd2 <- function(x, na.rm = FALSE) {
+  if (is.vector(x) || is.factor(x))
+    x <- x
+  else if (is.data.frame(x))
+    return(sapply(x, mysd1))
+  else
+    x <- as.double(x)
+  n <- length(x)
+  standard_deviation <- sqrt(sum((x - mean(x)) ^ 2) / (n - 1))
+  standard_deviation
+}
+
+mysd2(rivers)
+mysd2(USArrests)
+```
+# 3. Pythagorean Theorem Function
+```{r, error = TRUE}
+pythag <- function(a, b) {
+  if (is.character(a) || is.character(b))
+    stop('I need numeric values to make this work')
+  else if (a < 0 || b < 0)
+    stop('Values need to be positive')
+  result <- sqrt((a ^ 2) + (b ^ 2))
+  return(list("hypotenuse" = result, "sidea" = a, "sideb" = b))
+
+}
+pythag(4, 5)
+pythag("A", "B")
+pythag(-4, -5)
+pythag(4:10, 2:8)
+```
+# 4. Loops vs Apply()
+```{r}
+# 4A
+baseball <- plyr::baseball
+col_names <- sapply(baseball, class)
+col_names
+```
+
+```{r}
+# 4B
+baseball2 <- plyr::baseball[, c(1, 2, 6:12)]
+for (i in 1871:2007) {
+  for (j in 3:9) {
+    maximum <- max(baseball2[baseball2$year == i, ][j])
+    baseball2[baseball2$year == i, ][j] <- (baseball2[baseball2$year == i, ][j]/maximum)
+  } 
+}
+kable(head(baseball2, n = 7)) %>% kable_styling(position = "center", font_size = 13)
+str(baseball2)
+```
+
+# 5. Interacting with files outside of R
+```{r}
+# A.
+random_url <- "http://www.stat.ucla.edu/~vlew/datasets/spssSTUFF.zip"
+download.file(random_url, "spssSTUFF.zip")
+unzip("spssSTUFF.zip", exdir = "spssSTUFFdata")
+list.files("spssSTUFFdata")
+```
+
+```{r, message=FALSE}
+# B.
+library(readr)
+# Two dummy csv files in my directory : death01 and death02
+# One liner
+my_table <- lapply(list.files(pattern = "death[0-9][0-9]*.csv"), read_csv) %>% bind_rows()
+# "death[[:digit:]][[:digit:]]*.csv" would work too
+
+kable(head(my_table, n = 7)) %>% kable_styling(position = "center", font_size = 14)
+```
