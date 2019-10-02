@@ -1,1 +1,2 @@
-# Stats 20 - Summer Session 2019 
+# Stats 20: Statistical Programming in R (Summer 2019)
+
