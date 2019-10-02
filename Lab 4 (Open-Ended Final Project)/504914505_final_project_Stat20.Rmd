@@ -1,0 +1,370 @@
+---
+title: "Final Project"
+author: "Kevin Hahn"
+date: "8/3/2019"
+output: 
+  prettydoc::html_pretty:
+  theme: architect
+---
+
+```{r setup, include=TRUE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(utils)
+library(tidytext)
+library(textdata)
+library(extrafont)
+load("allRelevantObjects.RData")
+sentimentThis <- function(x) {
+  result <- x %>% unnest_tokens(word, review_body) %>%
+    inner_join(get_sentiments("afinn"), by = "word") %>%
+    group_by(review_id) %>% summarize(sentiment = mean(value), words = n())
+  result
+}
+```
+# Initial Data Cleaning Process
+We can use POSIXct to make the review dates useful as well as create new column variables that could be helpful: reviews on a given day, how many reviews a customer has given, how many reviews a book has, etc.
+```{r, eval = FALSE}
+# Lew's file shows us how to put a score on each important word
+mydata <- inner_join(Amazon2A, Amazon2B, by = "review_id") %>%
+  select(-c(customer_id.y))
+mydata <- mydata %>% na.omit()
+colnames(mydata)[1] <- "customer_id"
+print(summary(mydata))
+
+mydata$RDateTime <- strptime(mydata$review_date, format = "%Y-%m-%d") %>% 
+  as.POSIXct()
+mydata$RYEAR <- year(mydata$RDateTime)
+mydata$RWEEK <- week(mydata$RDateTime)
+mydata$RMONTH <- month(mydata$RDateTime) %>% 
+  factor(labels =  c("January","February", "March", "April", "May", 
+                     "June", "July", "August", "September",
+                     "October", "November", "December"))
+mydata$RDOW <- weekdays(mydata$RDateTime)
+mydata$RMONTH <- months(mydata$RDateTime)
+mydata$RQUART <- quarters(mydata$RDateTime)
+mydata$RDAY <- day(mydata$RDateTime)
+mydata$WEEKDAY_NUM <- wday(mydata$RDateTime)
+# Get the number of reviews on a given day using dplyr
+mydata <- mydata %>% group_by(review_date) %>% mutate(reviewsToday = n())
+all_review_counts <- distinct(mydata, reviewsToday, .keep_all=TRUE) 
+
+dataWithYears <- as.Date(mydata$review_date, "%Y/%m/%d")
+mydata$year <- as.numeric(format(dataWithYears, "%Y"))
+
+mydata <- mydata %>%
+  group_by(product_title) %>%
+  mutate(totalRevsOfThisBook = n())
+mydata <- mydata %>% group_by(customer_id) %>%
+  mutate(totalRevsByCustomer = n())
+mydata <- mydata %>% group_by(product_title) %>%
+  mutate(avgRating = mean(star_rating))
+
+save(mydata, file = "mydata.RData")
+save(all_review_counts, file = "all_review_counts.RData")
+```
+
+# Question 1: 
+```{r}
+# Highest Rated Books with >= 50 Reviews
+fiftyplus %>% group_by(product_title, avgRating) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(avgRating)) %>% head(n = 2)
+# Lowest Rated Books with >= 50 Reviews
+fiftyplus %>% group_by(product_title, avgRating) %>% 
+  summarise(count = n()) %>% 
+  arrange(avgRating) %>% head(n = 2)
+# First and second best, then first and second worst rated
+book_order <- c("Fearless: The Undaunted Courage and Ultimate Sacrifice of Navy SEAL Team SIX Operator Adam Brown",
+                "Goodnight, Goodnight Construction Site",
+                "It Could Happen To Anyone: Why Battered Women Stay",
+                "To Train Up a Child")
+```
+```{r, eval = FALSE}
+cuatro <- fiftyplus %>% 
+  filter(product_title == book_order[1] || 
+           product_title == book_order[2] ||
+           product_title == book_order[3] ||
+           product_title == book_order[4])
+```
+
+# Sentiment Analysis
+```{r, eval = FALSE}
+# Fearless
+book1analysis <- fiftyplus %>% filter(product_title == book_order[1]) %>%
+  sentimentThis()
+head(book1analysis)
+# Goodnight
+book2analysis <- fiftyplus %>% filter(product_title == book_order[2]) %>%
+  sentimentThis()
+head(book2analysis)
+# It Could Happen to Anyone
+book3analysis <- fiftyplus %>% filter(product_title == book_order[3]) %>%
+  sentimentThis()
+head(book3analysis)
+# To Train Up A Child
+book4analysis <- fiftyplus %>% filter(product_title == book_order[4]) %>%
+  sentimentThis()
+head(book4analysis)
+```
+```{r, warning=FALSE}
+# Sentiment Analysis continued
+test <- cuatro %>%
+  unnest_tokens(word, review_body) %>%
+  count(word, sort = TRUE) %>%
+  ungroup() %>%
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  group_by(word) %>%
+  mutate(contribution = value*n) %>%
+  arrange(desc(abs(contribution))) 
+sentiment1 <- cuatro %>% unnest_tokens(word, review_body) %>%
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  group_by(review_id) %>% summarize(sentiment = mean(value), words = n())
+# sentiment %>% arrange(desc(sentiment))
+
+cuatro_sentiment <- left_join(sentiment1, cuatro, by = "review_id")
+# 17 rows removed because review body wasn't enough to couldn't determine a sentiment score
+ordered_titles <- factor(cuatro_sentiment$product_title, book_order)
+```
+```{r, warning=FALSE, message=FALSE, dpi=300}
+# Detailed Sentiment Visual Analysis
+theme_set(theme_minimal(base_family = "Myanmar Text"))
+violin <- ggplot(data = cuatro_sentiment, aes(y = sentiment, x = ordered_titles, fill = ordered_titles)) +
+  geom_violin() + 
+  ylim(c(-5, 5)) + 
+  geom_boxplot(outlier.shape = NA, color="black", width = 0.2, position = position_dodge(width = 0.7))  +
+  labs(title = "Sentiment Ranges of the Top 2 Best and Worst Books", y = "Sentiment Score", x = "Book Title", fill = "Average Rating Rank") +
+  scale_x_discrete(breaks = book_order, 
+                   labels = c("Fearless", 
+                              "Goodnight, Goodnight\nConstruction Site",
+                              "It Could Happen\nTo Anyone",
+                              "To Train Up \nA Child")) +
+  scale_fill_discrete(labels = c("1st Highest", "2nd Highest", "1st Lowest", "2nd Lowest")) + 
+  theme(title=element_text(size=13,face="bold"), 
+        axis.text = element_text(size=8, face="bold"),
+        axis.title=element_text(size=11, face="bold"),
+        legend.title=element_text(face="bold"),
+        legend.text=element_text(face="bold"))
+plot(violin)
+
+# Jitter plot of the four books
+# Size of data point represents how many helpful votes the review received
+theme_set(theme_minimal(base_family = "Myanmar Text"))
+ggplot(cuatro_sentiment, aes(y = words, x = sentiment, 
+                             shape = product_title)) +
+  aes(size=helpful_votes, show_guide=FALSE) +
+  scale_size_continuous(range=c(3, 6), guide=FALSE) +
+  geom_jitter(aes(color=star_rating)) + 
+  scale_shape_manual(values=c(15, 16, 17, 18), labels=c("Fearless", "Goodnight Goodnight", "It Could\nHappen To Anyone", "To Train Up\n a Child")) +
+  labs(title="Sentiment and Rating by Length of Review", 
+       subtitle="Size of Points is Proportional to Helpful Votes",
+       y="Word Count", x="Sentiment Score", shape="Product", color="Star Rating") +
+  scale_color_gradient(low="red", high = "blue") + 
+  theme(legend.text=element_text(face="bold", size=10),
+        title=element_text(face="bold", size=13),
+        legend.title=element_text(face="bold", size=12),
+        axis.title=element_text(face="bold"),
+        axis.text=element_text(face="bold"))
+
+```
+For each of the four books, I wanted to include a violin plot in addition to the boxplot. It is such a common graphic that I've encountered on FiveThirtyEight articles (other than bubble maps) and adds a nice layer of meaning in conjunction with a boxplot. It represents the estimated density of the sentiment: the more data points in a particular range, then the larger the violin is for that range.
+
+Oddly enough, the book with the highest avg rating, Fearless, has a lower sentiment than the second highest, Goodnight, Goodnight Construction Site. This is likely due to the genre of Fearless. A war-related book about a NAVY Seal can be an objectively great book but its content could be quite morbid, as opposed to a children's bedtime book like Goodnight Goodnight Construction Site.
+For the two books with the worst rating, there weren't as many surprises. To Train Up a Child was second worst and its quartiles were slightly less negative than It Could Happen to Anyone.
+
+The scatterplot illustrates that for all four books, most reviewers got their point across in under 20 words despite how polarized these books are. 
+
+# Question 2: Visualization
+```{r, warning=FALSE, message=FALSE, fig.width = 13, fig.height = 8, dpi=300}
+# Process and clean the data
+theme_set(theme_classic(base_family = "Myanmar Text"))
+myheatmap <- ggplot(all_review_counts, aes(RWEEK, WEEKDAY_NUM, fill = reviewsToday)) +
+  geom_tile(color = "white") +
+  facet_wrap(~ RYEAR, ncol = 1) + scale_y_continuous(breaks = 1:7) +
+  scale_fill_gradientn(colours=c("#B5E384", "#FFFFBD", "#FFAE63", "#D61818")) +
+  scale_x_continuous(name = "Week of the Year", breaks = 1:52, labels = 1:52) +
+  labs(title = "Daily Activity Level of Amazon Book Reviews", fill = "Reviews Today", y = "Day of the Week") +
+  theme(panel.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 16, face = "bold"), 
+        axis.text = element_text(size = 7, face = "bold"), 
+        axis.title = element_text(size = 13, face = "bold"), 
+        legend.title = element_text(face = "bold"), 
+        legend.text = element_text(face="bold"),
+        strip.background = element_rect(color = "white", fill="lightgray"), 
+        strip.text = element_text(face = "bold"), 
+        axis.line.x.bottom = element_blank(),
+        axis.line.y.left = element_blank(),
+        panel.grid.major = element_line())
+plot(myheatmap)
+```
+
+Amazon has become increasingly influential and popular in recent years. I wanted to depict Amazon's growth in the book market by visualizing the daily activity level (# of reviews per day) that the company receieves. Amazon's higher growth and popularity would typically correspond to more customer engagement and reviews/feedback as they are now the go-to marketplace. Over the years, the bookselling market has gradually transitioned to more eBooks and online orders as opposed to in-store purchases. The Amazon Kindle was released to the market in late 2012, and Barnes & Noble was the last chain bookstore remaining until it was bought out by another company this year.
+
+A heatmap was best suited for this purpose because it is a great balance between informative and visually pleasing, and it reflects the aforementioned idea quite well. We can see that in 2012, there were only about 250 reviews per day. However, from the latter half of 2014 onwards, this number has nearly doubled to the 500+ range on most days. 
+
+# Question 3: 
+Since there are several aspects of these reviews, the time of the review is extremely helpful and it opens many doors for analysis. Using review time, I want to examine whether Vine reviews have become increasingly more common, and analyze the sentiment of Vine reviews compared to non-Vine reviews. These would provide good insights into how popular/engaged customers from the Vine program are (activity level) as well as how positive an average Vine review is.
+
+My hypothesis: On average, Vine reviews' sentiment is different from a non-Vine review, and growth in Vine member reviews has increased over time. 
+
+Outline: 
+
++ Parse the review dates
++ Count how many reviews took place on each day and append as new column to dataset
++ Generate an overlaid histogram to compare the sentiment distributions of Vine and non-Vine reviews
++ Examine the sentiment distributions of both groups by year
++ Compare the mean sentiments by year and overall means
++ Visualize the activity level of Vine customers by generating a heatmap
+
+Pseudocode:
+
+- Process the review dates using posixCT, append these new columns (day of week, month, week of year, etc) to original dataset
+- Perform sentiment analysis on the vine and non-vine datasets using the sentimentThis function I created and restructure the dataset accordingly
+- With this data, the overall and yearly sentiment histograms using ggplot and format accordingly. 
+- Add mean line on the yearly sentiment plots
+- Produce heatmap using reviews per day of the vine review dataset as our count variable
+- Set seed to ensure reproducible results, run two-sample t-test on the mean sentiments of Vine and non-Vine reviews
+
+```{r, eval=FALSE}
+noVines <- tibble() 
+for (i in 2012:2015) {  
+  annual_data <- mydata %>% filter(RYEAR == i & vine == "N")
+  annual_sentiment <- sentimentThis(annual_data)
+  annual_data <- left_join(annual_sentiment, annual_data, by = "review_id")
+  noVines <- bind_rows(noVines, annual_data)
+  }
+noVines <- noVines %>% na.omit()
+save(noVines, file = "vineless.RData")
+
+# Keep this below code
+vineOnly <- mydata %>% filter(vine == "Y")
+vine_scores <- vineOnly %>% unnest_tokens(word, review_body) %>%
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  group_by(review_id) %>% summarize(sentiment = mean(value), words = n())
+vine_sentiment <- left_join(vine_scores, vineOnly)
+save(vine_sentiment, file = "vine.RData")
+```
+```{r}
+# Overall mean sentiment & summary of Vine reviews
+summary(vine_sentiment$sentiment)
+# Overall mean sentiment & summary of non-Vine reviews
+summary(noVines$sentiment)
+
+```
+
+The Vine reviews' overall mean sentiment was more neutral than expected, so most Vine customers still write objective, level-headed critiques despite the prestige and incentives provided by the Vine program. The mean sentiment of non-Vine reviews was also more positive than anticipated. 
+
+# Visualizations
+To scale the graphs appropriately, I decided to generate an overlapping frequency density histogram to compare their distributions:
+
+```{r, warning=FALSE, message=FALSE, fig.width=8, fig.height=4, dpi=300}
+# Overlaid Histograms of Vine and Non-Vine
+# use "merged
+theme_set(theme_minimal(base_family = "Myanmar Text"))
+cool_graph <- ggplot(merged, aes(x = sentiment, fill = vine)) + 
+  geom_histogram(aes(y = ..density..), binwidth = 0.5, 
+                 breaks = seq(-5, 5, by=0.5), position = "dodge", 
+                 color = "black", alpha = 0.7) + xlim(c(-3.5, 5)) +
+  labs(title = "Sentiment Distribution of Amazon Book Reviews", 
+       y = "Frequency Density", 
+       x = "Sentiment Score", 
+       fill = "Vine Member") +
+  scale_fill_discrete(name = "Vine Member", 
+                      breaks=c("Y", "N"), labels = c("Yes", "No")) +
+  theme(plot.background = element_rect(fill="lightgray"), 
+        plot.title=element_text(size=14, face="bold", 
+                                hjust=0.5, lineheight=1.2),
+        axis.title.x=element_text(size=13, face="bold"),
+        axis.title.y=element_text(size=13, face="bold"),
+        axis.text.x=element_text(size=9, color="black", face="bold"),
+        axis.text.y=element_text(size=9, color="black", face="bold"),
+        legend.title=element_text(size=11, face="bold"), 
+        legend.text=element_text(size=9, face="bold")) 
+plot(cool_graph)
+```
+Interestingly enough, the distribution of Vine reviews looks a lot like an approximately Normal bell curve while that of non-Vine reviews is partially skewed. Graphically, the non-Vine reviews appear to be slightly more positive.
+By year, we can see there hasn't been very much change in the shape:
+```{r, warning=FALSE, message=FALSE, fig.width=10, fig.height=5, dpi=300}
+# Vine Member Reviews
+# vine_sentiment %>% arrange(desc(sentiment)) 
+# use sentiment_only
+# Vine Reviews-Only Sentiment Plot by Year
+theme_set(theme_minimal(base_family = "Myanmar Text"))
+vine_plot <- ggplot(data = vine_sentiment, mapping = aes(x = sentiment)) +
+  geom_histogram(aes(y = ..density..),  color = "black",
+                 breaks=seq(-3.5, 5, by=.5),
+                 fill = "dark green",
+                 binwidth = 0.5, alpha = 0.7) +
+  geom_vline(aes(xintercept=mean(sentiment)),
+             color="black", linetype="dashed", size=1) +
+  facet_grid(. ~ RYEAR) +
+  labs(title = "Sentiment Distribution of Vine Voice Reviews", 
+       x = "Sentiment Score", y = "Proportion", fill = "Vine Member") +
+  theme(plot.background = element_rect(fill="lightgray"), 
+        plot.title=element_text(size=14, face="bold", 
+                                hjust=0.5, lineheight=1.2),
+        axis.title.x=element_text(size=13, face="bold"),
+        axis.title.y=element_text(size=13, face="bold"),
+        axis.text.x=element_text(size=9, color="black", face="bold"),
+        axis.text.y=element_text(size=9, color="black", face="bold"),
+        strip.text=element_text(face="bold", size="10")) +
+  scale_x_continuous(breaks = -5:5)
+plot(vine_plot)
+```
+```{r, warning=FALSE, message=FALSE, fig.width=10, height=5, dpi=300}
+# Non-Vine Reviews Sentiment Histogram by Year
+theme_set(theme_minimal(base_family = "Myanmar Text"))
+vineless_plot <- ggplot(noVines, aes(x = sentiment)) +
+  geom_histogram(aes(y = ..density..), 
+                 breaks=seq(-3.5, 5, by=.5), 
+                 fill = "orange", color = "black", 
+                 binwidth = 0.5, alpha = 0.7) +
+  facet_grid(. ~ RYEAR) +
+  geom_vline(aes(xintercept=mean(sentiment)), color="black", 
+             linetype="dashed", size=1) +
+  labs(title = "Sentiment Distribution of Non-Vine Reviews", 
+       x = "Sentiment Score", y = "Proportion", fill = "Vine Member") +
+  theme(plot.background = element_rect(fill="lightgray"), 
+        plot.title=element_text(size=14, face="bold", 
+                                hjust=0.5, lineheight=1.2),
+        axis.title.x=element_text(size=13, face="bold"),
+        axis.title.y=element_text(size=13, face="bold"),
+        axis.text.x=element_text(size=9, color="black", face="bold"),
+        axis.text.y=element_text(size=9, color="black", face="bold"),
+        strip.text=element_text(face="bold", size="10"))
+plot(vineless_plot)
+```
+Surprisingly, the number of daily Vine reviews, has increased over time:
+```{r, warning=FALSE, message=FALSE, fig.width = 13, fig.height = 8, dpi=300}
+red_gradient <- c("#FFDEDE","#FF9494", "#FF4A4A", "#FF0000")
+theme_set(theme_classic(base_family = "Myanmar Text"))
+vinemap <- ggplot(vine_sentiment, aes(RWEEK, WEEKDAY_NUM, fill = reviewsToday)) +
+  geom_tile(color = "white") +
+  facet_wrap(~ RYEAR, ncol = 1) + scale_y_continuous(breaks = 1:7) +
+  scale_fill_gradientn(colours=red_gradient) +
+  scale_x_continuous(name = "Week of the Year",
+                     breaks = 1:52, labels = 1:52) +
+  labs(title = "Daily Vine Reviews", fill = "Reviews Today", y = "Day of the Week") +
+  theme(panel.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 14, face = "bold"), 
+        axis.text = element_text(size = 8, face = "bold"), 
+        axis.title = element_text(size = 12, face = "bold"), 
+        legend.title = element_text(face = "bold"), 
+        legend.text = element_text(face="bold"),
+        strip.background = element_rect(color = "white", fill="lightgray"), 
+        strip.text = element_text(face = "bold"), 
+        axis.line.x.bottom = element_blank(),
+        axis.line.y.left = element_blank(),
+        panel.grid.major = element_line())
+plot(vinemap)
+```
+We can then run a two-sample t-test to confirm what we've seen graphically about Vine vs. non-Vine reviews:
+the mean sentiment of Vine reviews is not the same as that of non-Vine reviews
+```{r}
+# Two-Sample T-Test
+set.seed(1)
+result <- t.test(sentiment ~ vine, data = merged)
+result
+```
