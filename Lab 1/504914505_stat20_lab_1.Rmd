@@ -1,0 +1,131 @@
+---
+title: "Lab 1"
+author: "Kevin Hahn"
+date: "July 7th, 2019"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+data(nhtemp)
+data(USArrests)
+data(BOD)
+```
+## **1. Installing R & RStudio**
+```{r}
+system("whoami", intern = TRUE)
+```
+![Screenshot](Proof.png)
+
+## **2. Installing Packages**
+```{r}
+find.package("tidyverse")
+find.package("readr")
+find.package("foreign")
+```
+
+## **3. Application of Basic R Rules**
+
+### 3.1 Working with vectors and some vector math
+#### A. Convert 79 F to Celsius
+```{r}
+(79 - 32) * (5 / 9)
+```
+#### B. Converting values in nhtemp to Celsius
+```{r}
+(as.numeric(nhtemp) - 32) * (5 / 9)
+```
+### 3.2 Character and Logical Vectors
+
+#### A. Create a character vector: 
+```{r}
+words <- c("wrath", "avarice", "sloth", "pride", "lust", "envy", "gluttony")
+```
+
+#### B. Print only the last two elements of the character vector:
+```{r}
+words[(length(words) - 1):length(words)]
+```
+
+#### C. Why does d + 3 result in an error but b + 3 did not?
+Note: The order of precedence from highest to lowest is ```character > numeric > logical```.  
+```b + 3``` worked because coercion of logical values to numeric values simply turns ```TRUE``` into ```1```, and ```FALSE``` into ```0```. Now these newly converted elements can be used with binary operators like the ```+``` sign. However, ```d + 3``` doesn't work because ```d``` is a character matrix created from the character vector ```a``` and the logical vector ```b```. Since character has higher precedence than logical, the logical elements from ```b``` are converted to character values (```TRUE``` and ```FALSE``` become ```"TRUE"``` and ```"FALSE"```) in this case. All the elements in ```d``` are now character values and thus non-numeric, which explains why ```d + 3``` generates the error message: ```Error: non-numeric argument to binary operator```. 
+
+### 3.3 Matrices
+
+#### A. Three ways to create the matrix:  
+```{r}
+traditional <- matrix(49:20, nrow = 6, ncol = 5, byrow = TRUE)
+traditional # conventional method
+
+row_bind <- rbind(49:45, 44:40, 39:35, 34:30, 29:25, 24:20)
+row_bind 
+
+column_bind <- cbind(c(49, 44, 39, 34, 29, 24),
+                     c(48, 43, 38, 33, 28, 23),
+                     c(47, 42, 37, 32, 27, 22),
+                     c(46, 41, 36, 31, 26, 21),
+                     c(45, 40, 35, 30, 25, 20))
+column_bind 
+
+# transpose_method <- t(cbind(49:45, 44:40, 39:35, 34:30, 29:25, 24:20))
+# transpose_method
+```
+
+#### B. Display the values in the 3rd row:
+```{r}
+traditional[3, ]
+```
+
+#### C. Display values in the 2nd and 4th column
+```{r}
+traditional[, c(2, 4)]
+```
+### 3.4 Data Frames
+#### A. Identify a data set other than USArrests:
+```{r}
+data(BOD)
+```
+
+#### B. Using class() and mode() to check whether our dataset selected was appropriate:
+```{r}
+class(BOD)
+mode(BOD)
+```
+
+#### C. Obtaining the number of observations and variables that our data frame has:
+```{r}
+str(BOD)
+```
+
+#### D. Data Extraction
+
+* All data for California
+* All values for UrbanPop
+* All variables for the state with the lowest murder rate
+* Only observations with a minimum UrbanPop of 85 or higher
+```{r}
+USArrests[5, ] # All data for California
+USArrests[, 3] # All values for UrbanPop
+USArrests[which.min(USArrests$Murder), ] # All variables for state with the lowest murder rate
+USArrests[USArrests$UrbanPop >= 85, ] # Only observations with a minimum UrbanPop of 85 or higher
+```
+## **4. Writing Functions**
+
+### A. Pseudocode
+
+* Input temperature in Fahrenheit
+  + Check if user entered a number
+    - If false, then prompt the user to enter a valid number
+  + Subtract 32 from the temperature
+  + Multiply result by (5 / 9)
+  + Store final result in a variable
+* Output temperature in Celsius
+  + Return the variable containing the final result
+
+### B. Implementing Pseudocode
+```{r Fahrenheit to Celsius Function}
+fToC <- function(temp) {
+  finalValue <- (temp - 32) * (5 / 9)
+  return(finalValue)
+}
+```
